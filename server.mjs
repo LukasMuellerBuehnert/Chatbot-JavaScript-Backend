@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import fs from "fs";
@@ -5,18 +6,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Groq from "groq-sdk";
 
-// ---------- Einstellungen ----------
+// ---------- Settings ----------
 const THRESHOLD = 1.0;
 const ALWAYS_LABELS = ["greeting","thanks","goodbye","smalltalk"];
 const GROQ_MODEL = "llama-3.1-8b-instant";
 
-// ---------- Hilfsfunktionen ----------
-function fold(s=""){ s=s.toLowerCase().trim(); return s
- .replaceAll("ä","ae").replaceAll("ö","oe").replaceAll("ü","ue").replaceAll("ß","ss")
- .replace(/\s+/g," "); }
+// ---------- Helpers ----------
+function fold(s=""){ s=s.toLowerCase().trim();
+  return s.replaceAll("ä","ae").replaceAll("ö","oe").replaceAll("ü","ue").replaceAll("ß","ss")
+          .replace(/\s+/g," "); }
 function tokenize(s=""){ return (s.toLowerCase().match(/\w+/g)) || []; }
 
-// ---------- Daten laden ----------
+// ---------- Data ----------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const DATA_PATH  = path.join(__dirname, "data", "faq.jsonl");
@@ -34,7 +35,7 @@ if (fs.existsSync(DATA_PATH)) {
 const labelsFromData = Object.fromEntries(docs.map(d=>[d._title_fold,d]));
 const LABELS = Object.keys(labelsFromData).concat(ALWAYS_LABELS);
 
-// ---------- BM25 (leichtgewichtig) ----------
+// ---------- BM25 (leicht) ----------
 const corpus = docs.map(d => tokenize(d.text));
 const df = new Map();
 for (const doc of corpus) for (const t of new Set(doc)) df.set(t,(df.get(t)||0)+1);
@@ -62,10 +63,11 @@ const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 async function classifyLangIntent(q){
   const labelsStr = LABELS.join(", ");
-  const prompt = "Tasks:\n1) Detect user language (ISO-639-1 like 'de','en',...).\n"
-    + `2) Classify the user's question into ONE label from this exact set: [${labelsStr}]. If nothing fits, return 'unknown'.\n`
-    + 'Return ONLY JSON: {"lang":"..","intent":".."}\n'
-    + `User: ${q}`;
+  const prompt =
+    "Tasks:\n1) Detect user language (ISO-639-1 like 'de','en',...).\n" +
+    `2) Classify the user's question into ONE label from this exact set: [${labelsStr}]. If nothing fits, return 'unknown'.\n` +
+    'Return ONLY JSON: {"lang":"..","intent":".."}\n' +
+    `User: ${q}`;
   try {
     const r = await client.chat.completions.create({
       model: GROQ_MODEL, temperature: 0,
@@ -87,7 +89,8 @@ async function smalltalkLLM(intent, lang){
   const r = await client.chat.completions.create({
     model: GROQ_MODEL, temperature: 0.2,
     messages: [
-      { role:"system", content:"You are a website assistant, focus on helping the user. One very short, friendly sentence in the target language. Don't ask the user how he is. If intent=smalltalk, answer short & safe. No emojis unless user used them."},
+      { role:"system",
+        content:"You are a website assistant, focus on helping the user. One very short, friendly sentence in the target language. Don’t ask how they are. If intent=smalltalk, reply short & safe. No emojis unless user used them."},
       { role:"user", content:`Target language: ${lang}\nIntent: ${intent}` }
     ]
   });
@@ -96,8 +99,8 @@ async function smalltalkLLM(intent, lang){
 
 async function llmAnswer(question, snippets, lang){
   const ctx = snippets.map(d=>`- ${d.text} (Quelle: ${d.url})`).join("\n");
-  const sys = "You are a website assistant. Answer briefly in the requested target language. "
-    + "Only use the provided excerpts; if insufficient, try commonsense if not specific facts, or say you don't know and refer to /kontakt.";
+  const sys = "You are a website assistant. Answer briefly in the requested target language. " +
+              "Only use the provided excerpts; if insufficient, try commonsense if not specific facts, or say you don't know and refer to /kontakt.";
   const prompt = `Target language: ${lang}\nQuestion: ${question}\n\nExcerpts:\n${ctx}\n\nAnswer:`;
   const r = await client.chat.completions.create({
     model: GROQ_MODEL, temperature: 0.2,
@@ -109,6 +112,7 @@ async function llmAnswer(question, snippets, lang){
 // ---------- Server ----------
 const app = express();
 
+// CORS
 const ALLOWED_ORIGINS = [
   "https://lukasmuellerbuehnert.github.io",
   "http://testingground.local", "http://localhost", "http://127.0.0.1",
