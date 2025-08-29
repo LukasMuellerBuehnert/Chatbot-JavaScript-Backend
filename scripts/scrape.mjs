@@ -6,8 +6,8 @@ import fetch from "node-fetch";
 
 const START_URL = "https://md-hellas.gr/";         // deine Domain
 const MAX_PAGES = 100;
-const ALLOW = [/^\/(about|contact|impressum|datenschutz|privacy|terms|faq|agb|shipping|returns|opening|standorte|locations)?/i];
-const DENY  = [/^\/(wp-admin|cart|checkout|login|search|tag|category|page\/\d+)/i];
+//const ALLOW = [/^\/(about|contact|impressum|datenschutz|privacy|terms|faq|agb|shipping|returns|opening|standorte|locations)?/i];
+//const DENY  = [/^\/(wp-admin|cart|checkout|login|search|tag|category|page\/\d+)/i];
 
 const seen = new Set();
 const out = [];
