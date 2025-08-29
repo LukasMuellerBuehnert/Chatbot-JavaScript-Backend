@@ -1,0 +1,23 @@
+name: Crawl site
+on:
+  schedule: [{ cron: "0 2 * * *" }]   # täglich 02:00 UTC
+  workflow_dispatch:
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm i node-fetch cheerio
+      - run: node scripts/scrape.mjs
+      - name: Commit changes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add data/site.jsonl data/site-state.json
+            git commit -m "chore: refresh site scrape"
+            git push
+          fi
