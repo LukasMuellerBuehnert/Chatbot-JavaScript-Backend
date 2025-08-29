@@ -111,7 +111,7 @@ export async function smalltalkLLM(intent, lang){
     model: GROQ_MODEL, temperature: 0.2,
     messages: [
       { role:"system",
-        content:"You are a website assistant, focus on helping the user. One very short, friendly sentence in the target language. Don't ask how they are. If intent=smalltalk, reply short & safe. No emojis unless user used them."
+        content:"You are a website assistant for MD Hellas answer in their role, focus on helping the user. One very short, friendly sentence in the target language. Don't ask how they are. If intent=smalltalk, reply short & safe. No emojis unless user used them."
       },
       { role:"user", content:`Target language: ${lang}\nIntent: ${intent}` }
     ]
