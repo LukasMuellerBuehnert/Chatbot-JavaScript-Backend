@@ -1,3 +1,4 @@
+// _utils.mjs
 import fs from "fs";
 import path from "path";
 import Groq from "groq-sdk";
@@ -13,21 +14,42 @@ export const fold = (s="") => s.toLowerCase().trim()
 
 export const tokenize = (s="") => (s.toLowerCase().match(/\w+/g)) || [];
 
-// --- Daten laden ---
-const DATA_PATH = path.join(process.cwd(), "data", "faq.jsonl");
-export const docs = [];
-if (fs.existsSync(DATA_PATH)) {
-  for (const line of fs.readFileSync(DATA_PATH,"utf8").split(/\r?\n/).filter(Boolean)) {
-    try {
-      const d = JSON.parse(line);
-      if (d.url && d.title && d.text) { d._title_fold = fold(d.title); docs.push(d); }
-    } catch {}
-  }
+// --- JSONL Loader ---
+function loadJSONL(absPath){
+  if (!fs.existsSync(absPath)) return [];
+  return fs.readFileSync(absPath,"utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map(l => {
+      try {
+        const d = JSON.parse(l);
+        if (d?.url && d?.title && d?.text) return d;
+      } catch {}
+      return null;
+    })
+    .filter(Boolean);
 }
+
+// --- Daten laden: FAQ + SITE (gemerged) ---
+const DATA_DIR = path.join(process.cwd(), "data");
+const FAQ_PATH  = path.join(DATA_DIR, "faq.jsonl");
+const SITE_PATH = path.join(DATA_DIR, "site.jsonl");
+
+const docsFaq  = loadJSONL(FAQ_PATH);
+const docsSite = loadJSONL(SITE_PATH);
+
+// merge (FAQ zuerst, dann Site). Optional: Duplikate per URL entfernen:
+const byUrl = new Map();
+for (const d of [...docsFaq, ...docsSite]) {
+  if (!byUrl.has(d.url)) byUrl.set(d.url, d);
+}
+export const docs = Array.from(byUrl.values()).map(d => ({ ...d, _title_fold: fold(d.title) }));
+
+// Labels aus ALLEN Dokumenten + feste Intents
 export const labelsFromData = Object.fromEntries(docs.map(d => [d._title_fold, d]));
 export const LABELS = Object.keys(labelsFromData).concat(ALWAYS_LABELS);
 
-// --- Mini-BM25 (wie vorher logisch) ---
+// --- Mini-BM25 Index auf dem gemergten Korpus ---
 const corpus = docs.map(d => tokenize(d.text));
 const df = new Map();
 for (const doc of corpus) for (const t of new Set(doc)) df.set(t,(df.get(t)||0)+1);
@@ -54,7 +76,7 @@ export function bm25Scores(qTokens){
 // --- Groq Client ---
 export const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// --- LLM-Funktionen (wie Python) ---
+// --- LLM-Funktionen ---
 export async function classifyLangIntent(q){
   const labelsStr = LABELS.join(", ");
   const prompt =
@@ -98,7 +120,11 @@ export async function smalltalkLLM(intent, lang){
 }
 
 export async function llmAnswer(question, snippets, lang){
-  const ctx = snippets.map(d => `- ${d.text} (Quelle: ${d.url})`).join("\n");
+  // Kontext knapp halten (Prompt-Budget)
+  const ctx = snippets.slice(0,2) // max 2 Snippets
+    .map(d => `- ${String(d.text).slice(0,900)} (Source: ${d.url})`)
+    .join("\n");
+
   const sys =
     "You are a website assistant. Answer briefly in the requested target language. " +
     "Only use the provided excerpts; if insufficient, try commonsense if not about specific facts, or say you don't know and refer to /kontakt.";
